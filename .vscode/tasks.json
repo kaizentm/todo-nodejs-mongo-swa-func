@@ -41,21 +41,10 @@
             "type": "dotenv",
             "targetTasks": [
                 "Restore API",
-                "Start Functions"
+                "API npm start"
             ],
             "file": "${input:dotEnvFilePath}"
         },
-		{
-            "label": "Start Functions",
-			"type": "func",
-			"command": "host start --port 3100 --cors *",
-			"problemMatcher": "$func-python-watch",
-			"isBackground": true,
-			"dependsOn": "Restore API",
-            "options": {
-                "cwd": "./src/api"
-            }
-		},
         {
             "label": "Restore API",
             "type": "shell",
@@ -66,15 +55,30 @@
             "problemMatcher": []
         },
         {
+            "label": "API npm start",
+            "detail": "Helper task--use 'Start API' task to ensure environment is set up correctly",
+            "type": "shell",
+            "command": "func start --typescript --port 3100",
+            "options": {
+                "cwd": "${workspaceFolder}/src/api/",
+                "env": {
+                    "NODE_ENV": "development"
+                }
+            },
+            "presentation": {
+                "panel": "dedicated",
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Start API and Web",
-            "dependsOn":[
+            "dependsOn": [
                 "Start API",
                 "Start Web"
             ],
             "problemMatcher": []
         }
     ],
-
     "inputs": [
         {
             "id": "dotEnvFilePath",

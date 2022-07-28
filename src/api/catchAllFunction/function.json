@@ -1,24 +1,17 @@
 {
-  "scriptFile": "__init__.py",
+  "generatedBy": "ezfunc",
   "bindings": [
     {
-      "authLevel": "anonymous",
       "type": "httpTrigger",
+      "authLevel": "anonymous",
       "direction": "in",
       "name": "req",
-      "methods": [
-        "get",
-        "put",
-        "post",
-        "patch",
-        "delete"
-      ],
-      "route": "{*route}"
+      "route": "{*restOfPath}"
     },
     {
       "type": "http",
       "direction": "out",
-      "name": "$return"
+      "name": "res"
     }
   ]
 }

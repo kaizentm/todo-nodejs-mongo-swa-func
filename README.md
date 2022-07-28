@@ -1,8 +1,8 @@
-# ToDo Application with a Python API and Azure Cosmos DB API for MongoDB on Static Web Apps and Functions
+# ToDo Application with a Node.js API and Azure Cosmos DB API for MongoDB on Static Web Apps and Functions
 
-[![Open in Remote - Containers](https://img.shields.io/static/v1?label=Remote%20-%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/azure-samples/todo-python-mongo-swa-func)
+[![Open in Remote - Containers](https://img.shields.io/static/v1?label=Remote%20-%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/azure-samples/todo-nodejs-mongo-swa-func)
 
-A complete ToDo application that includes everything you need to build, deploy, and monitor an Azure solution using React.js for the Web application, Python for the API, Azure Cosmos DB API for MongoDB for storage, and Azure Monitor for monitoring and logging. It includes application code, tools, and pipelines that serve as a foundation from which you can build upon and customize when creating your own solutions.
+A complete ToDo application that includes everything you need to build, deploy, and monitor an Azure solution using React.js for the Web application, Node.js for the API, Azure Cosmos DB API for MongoDB for storage, and Azure Monitor for monitoring and logging. It includes application code, tools, and pipelines that serve as a foundation from which you can build upon and customize when creating your own solutions.
 
 Let's jump in and get the ToDo app up and running in Azure. When you are finished, you will have a fully functional web app deployed on Azure. In later steps, you'll see how to setup a pipeline and monitor the application.
 
@@ -25,7 +25,7 @@ The following prerequisites are required to use this application. Please ensure 
     ```
 - [Azure CLI (2.38.0+)](https://docs.microsoft.com/cli/azure/install-azure-cli)
 - [Azure Functions Core Tools (4+)](https://docs.microsoft.com/azure/azure-functions/functions-run-local)
-- [Python (3.8+)](https://www.python.org/downloads/) - for the API backend
+- [Node.js with npm (16.13.1+)](https://nodejs.org/) - for API backend and Web frontend
 - [Git (2.36.1+)](https://git-scm.com/)
 
 ### Quickstart
@@ -33,11 +33,10 @@ The following prerequisites are required to use this application. Please ensure 
 The fastest way for you to get this application up and running on Azure is to use the `azd up` command. This single command will create and configure all necessary Azure resources - including access policies and roles for your account and service-to-service communication with Managed Identities.
 
 1. Open a terminal, create a new empty folder, and change into it.
-1. Create a new [Python virtual environment](https://docs.python.org/3/library/venv.html).
 1. Run the following command to initialize the project, provision Azure resources, and deploy the application code.
 
 ```bash
-azd up --template todo-python-mongo-swa-func
+azd up --template todo-nodejs-mongo-swa-func
 ```
 
 You will be prompted for the following information:
@@ -46,7 +45,7 @@ You will be prompted for the following information:
 - `Azure Location`: The Azure location where your resources will be deployed.
 - `Azure Subscription`: The Azure Subscription where your resources will be deployed.
 
-> NOTE: This template may only be used with the following Azure locations:
+> NOTE: This template may only be used used with following Azure locations:
 >
 > - Central US
 > - East Asia
@@ -54,7 +53,7 @@ You will be prompted for the following information:
 > - West Europe
 > - West US 2
 >
-> If you attempt to use it with another region, the provision step will fail.
+> If you attempt to use the template with an unsupported region, the provision step will fail.
 
 > NOTE: This may take a while to complete as it executes three commands: `azd init` (initializes environment), `azd provision` (provisions Azure resources), and `azd deploy` (deploys application code). You will see a progress indicator as it provisions and deploys your application.
 

@@ -4,7 +4,7 @@ param resourceToken string
 param tags object
 
 resource web 'Microsoft.Web/staticSites@2021-03-01' = {
-  name: 'stapp-web-${resourceToken}'
+  name: 'stapp-${resourceToken}'
   location: location
   tags: union(tags, {
       'azd-service-name': 'web'
@@ -29,7 +29,7 @@ resource api 'Microsoft.Web/sites@2021-03-01' = {
     serverFarmId: appServicePlan.id
     siteConfig: {
       numberOfWorkers: 1
-      linuxFxVersion: 'PYTHON|3.8'
+      linuxFxVersion: 'NODE|16'
       alwaysOn: false
       functionAppScaleLimit: 200
       minimumElasticInstanceCount: 0
@@ -54,9 +54,9 @@ resource api 'Microsoft.Web/sites@2021-03-01' = {
     name: 'appsettings'
     properties: {
       'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
-      'AzureWebJobsStorage': 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+      'AzureWebJobsStorage': 'DefaultEndpointsProtocol=https;AccountName=${storage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storage.listKeys().keys[0].value}'
       'FUNCTIONS_EXTENSION_VERSION': '~4'
-      'FUNCTIONS_WORKER_RUNTIME': 'python'
+      'FUNCTIONS_WORKER_RUNTIME': 'node'
       'SCM_DO_BUILD_DURING_DEPLOYMENT': 'true'
       'AZURE_COSMOS_CONNECTION_STRING_KEY': 'AZURE-COSMOS-CONNECTION-STRING'
       'AZURE_COSMOS_DATABASE_NAME': cosmos::database.name

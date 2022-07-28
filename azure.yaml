@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 
-name: todo-python-mongo-swa-func
+name: todo-nodejs-mongo-swa-func
 metadata:
-  template: todo-python-mongo-swa-func@0.0.1-beta
+  template: todo-nodejs-mongo-swa-func@0.0.1-beta
 services:
   web:
     project: src/web
@@ -11,5 +11,5 @@ services:
     host: staticwebapp
   api:
     project: src/api
-    language: py
+    language: js
     host: function
