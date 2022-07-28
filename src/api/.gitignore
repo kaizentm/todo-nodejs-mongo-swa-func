@@ -1,4 +1,2 @@
-obj
-bin
-.vs
-.idea
+*env/
+__pycache__

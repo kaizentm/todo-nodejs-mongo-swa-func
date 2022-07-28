@@ -1,52 +1,20 @@
 param location string
+param principalId string = ''
 param resourceToken string
 param tags object
 
-resource web 'Microsoft.Web/sites@2021-03-01' = {
-  name: 'app-web-${resourceToken}'
+resource web 'Microsoft.Web/staticSites@2021-03-01' = {
+  name: 'stapp-web-${resourceToken}'
   location: location
   tags: union(tags, {
       'azd-service-name': 'web'
     })
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
   properties: {
-    serverFarmId: appServicePlan.id
-    siteConfig: {
-      alwaysOn: true
-      ftpsState: 'FtpsOnly'
-    }
-    httpsOnly: true
-  }
-
-  resource appSettings 'config' = {
-    name: 'appsettings'
-    properties: {
-      'SCM_DO_BUILD_DURING_DEPLOYMENT': 'false'
-      'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
-    }
-  }
-
-  resource logs 'config' = {
-    name: 'logs'
-    properties: {
-      applicationLogs: {
-        fileSystem: {
-          level: 'Verbose'
-        }
-      }
-      detailedErrorMessages: {
-        enabled: true
-      }
-      failedRequestsTracing: {
-        enabled: true
-      }
-      httpLogs: {
-        fileSystem: {
-          enabled: true
-          retentionInDays: 1
-          retentionInMb: 35
-        }
-      }
-    }
+    provider: 'Custom'
   }
 }
 
@@ -56,13 +24,25 @@ resource api 'Microsoft.Web/sites@2021-03-01' = {
   tags: union(tags, {
       'azd-service-name': 'api'
     })
-  kind: 'app,linux'
+  kind: 'functionapp,linux'
   properties: {
     serverFarmId: appServicePlan.id
     siteConfig: {
-      alwaysOn: true
+      numberOfWorkers: 1
+      linuxFxVersion: 'PYTHON|3.8'
+      alwaysOn: false
+      functionAppScaleLimit: 200
+      minimumElasticInstanceCount: 0
       ftpsState: 'FtpsOnly'
+      use32BitWorkerProcess: false
+      cors: {
+        allowedOrigins: [
+          'https://ms.portal.azure.com'
+          'https://${web.properties.defaultHostname}'
+        ]
+      }
     }
+    clientAffinityEnabled: false
     httpsOnly: true
   }
 
@@ -73,8 +53,14 @@ resource api 'Microsoft.Web/sites@2021-03-01' = {
   resource appSettings 'config' = {
     name: 'appsettings'
     properties: {
-      'AZURE_SQL_CONNECTION_STRING': AZURE_SQL_CONNECTION_STRING
       'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
+      'AzureWebJobsStorage': 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+      'FUNCTIONS_EXTENSION_VERSION': '~4'
+      'FUNCTIONS_WORKER_RUNTIME': 'python'
+      'SCM_DO_BUILD_DURING_DEPLOYMENT': 'true'
+      'AZURE_COSMOS_CONNECTION_STRING_KEY': 'AZURE-COSMOS-CONNECTION-STRING'
+      'AZURE_COSMOS_DATABASE_NAME': cosmos::database.name
+      'AZURE_KEY_VAULT_ENDPOINT': keyVault.properties.vaultUri
     }
   }
 
@@ -108,7 +94,57 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'B1'
+    name: 'Y1'
+    tier: 'Dynamic'
+    size: 'Y1'
+    family: 'Y'
+  }
+  kind: 'functionapp'
+  properties: {
+    reserved: true
+  }
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' = {
+  name: 'keyvault${resourceToken}'
+  location: location
+  tags: tags
+  properties: {
+    tenantId: subscription().tenantId
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    accessPolicies: concat([
+        {
+          objectId: api.identity.principalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+          tenantId: subscription().tenantId
+        }
+      ], !empty(principalId) ? [
+        {
+          objectId: principalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+          tenantId: subscription().tenantId
+        }
+      ] : [])
+  }
+
+  resource cosmosConnectionString 'secrets' = {
+    name: 'AZURE-COSMOS-CONNECTION-STRING'
+    properties: {
+      value: cosmos.listConnectionStrings().connectionStrings[0].connectionString
+    }
   }
 }
 
@@ -137,44 +173,108 @@ module applicationInsightsResources './applicationinsights.bicep' = {
   }
 }
 
-// 2021-11-01-preview because that is latest valid version
-resource sqlServer 'Microsoft.Sql/servers@2021-11-01-preview' = {
-  name: 'sql-${resourceToken}'
+resource storage 'Microsoft.Storage/storageAccounts@2021-09-01' = {
+  name: 'stor${resourceToken}'
   location: location
   tags: tags
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
   properties: {
-    version: '12.0'
-    minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-    administrators: {
-      administratorType: 'ActiveDirectory'
-      principalType: 'User'
-      sid: api.identity.principalId
-      login: 'activedirectoryadmin'
-      tenantId: api.identity.tenantId
-      azureADOnlyAuthentication: true
-    }
-  }
-
-  resource database 'databases' = {
-    name: 'ToDo'
-    location: location
-  }
-
-  resource firewall 'firewallRules' = {
-    name: 'Azure Services'
-    properties: {
-      startIpAddress: '0.0.0.0'
-      endIpAddress: '0.0.0.0'
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: 'Allow'
     }
   }
 }
 
-// Defined as a var here because it is used above
+resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' = {
+  name: 'cosmos-${resourceToken}'
+  kind: 'MongoDB'
+  location: location
+  tags: tags
+  properties: {
+    consistencyPolicy: {
+      defaultConsistencyLevel: 'Session'
+    }
+    locations: [
+      {
+        locationName: location
+        failoverPriority: 0
+        isZoneRedundant: false
+      }
+    ]
+    databaseAccountOfferType: 'Standard'
+    enableAutomaticFailover: false
+    enableMultipleWriteLocations: false
+    apiProperties: {
+      serverVersion: '4.0'
+    }
+    capabilities: [
+      {
+        name: 'EnableServerless'
+      }
+    ]
+  }
 
-var AZURE_SQL_CONNECTION_STRING = 'Server=${sqlServer.properties.fullyQualifiedDomainName}; Authentication=Active Directory Default; Database=${sqlServer::database.name};'
+  resource database 'mongodbDatabases' = {
+    name: 'Todo'
+    properties: {
+      resource: {
+        id: 'Todo'
+      }
+    }
 
-output AZURE_SQL_CONNECTION_STRING string = AZURE_SQL_CONNECTION_STRING
+    resource list 'collections' = {
+      name: 'TodoList'
+      properties: {
+        resource: {
+          id: 'TodoList'
+          shardKey: {
+            _id: 'Hash'
+          }
+          indexes: [
+            {
+              key: {
+                keys: [
+                  '_id'
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+
+    resource item 'collections' = {
+      name: 'TodoItem'
+      properties: {
+        resource: {
+          id: 'TodoItem'
+          shardKey: {
+            _id: 'Hash'
+          }
+          indexes: [
+            {
+              key: {
+                keys: [
+                  '_id'
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+output AZURE_COSMOS_CONNECTION_STRING_KEY string = 'AZURE-COSMOS-CONNECTION-STRING'
+output AZURE_COSMOS_DATABASE_NAME string = cosmos::database.name
+output AZURE_KEY_VAULT_ENDPOINT string = keyVault.properties.vaultUri
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
-output WEB_URI string = 'https://${web.properties.defaultHostName}'
+output WEB_URI string = 'https://${web.properties.defaultHostname}'
 output API_URI string = 'https://${api.properties.defaultHostName}'
