@@ -12,18 +12,17 @@
             "url": "http://localhost:3000",
             "sourceMapPathOverrides": {
                 "webpack:///src/*": "${webRoot}/*"
-            },
+            }, 
         },
+
         {
             "name": "Debug API",
             "request": "launch",
             "runtimeArgs": [
-                "start",
-                "--typescript",
-                "--port",
-                "3100"
+                "run",
+                "start"
             ],
-            "runtimeExecutable": "func",
+            "runtimeExecutable": "npm",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -37,6 +36,7 @@
             "outputCapture": "std"
         },
     ],
+
     "inputs": [
         {
             "id": "dotEnvFilePath",

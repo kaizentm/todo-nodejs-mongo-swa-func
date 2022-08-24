@@ -1,105 +1,46 @@
+param name string
 param location string
 param principalId string = ''
 param resourceToken string
 param tags object
+param apiImageName string = ''
+param webImageName string = ''
 
 var abbrs = loadJsonContent('abbreviations.json')
 
-resource web 'Microsoft.Web/staticSites@2021-03-01' = {
-  name: '${abbrs.webStaticSites}${resourceToken}'
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2022-03-01' = {
+  name: '${abbrs.appManagedEnvironments}${resourceToken}'
   location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
-  sku: {
-    name: 'Free'
-    tier: 'Free'
-  }
+  tags: tags
   properties: {
-    provider: 'Custom'
-  }
-}
-
-resource api 'Microsoft.Web/sites@2021-03-01' = {
-  name: '${abbrs.webSitesFunctions}api-${resourceToken}'
-  location: location
-  tags: union(tags, { 'azd-service-name': 'api' })
-  kind: 'functionapp,linux'
-  properties: {
-    serverFarmId: appServicePlan.id
-    siteConfig: {
-      numberOfWorkers: 1
-      linuxFxVersion: 'NODE|16'
-      alwaysOn: false
-      functionAppScaleLimit: 200
-      minimumElasticInstanceCount: 0
-      ftpsState: 'FtpsOnly'
-      use32BitWorkerProcess: false
-      cors: {
-        allowedOrigins: [
-          'https://ms.portal.azure.com'
-          'https://${web.properties.defaultHostname}'
-        ]
-      }
-    }
-    clientAffinityEnabled: false
-    httpsOnly: true
-  }
-
-  identity: {
-    type: 'SystemAssigned'
-  }
-
-  resource appSettings 'config' = {
-    name: 'appsettings'
-    properties: {
-      APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
-      AzureWebJobsStorage: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storage.listKeys().keys[0].value}'
-      FUNCTIONS_EXTENSION_VERSION: '~4'
-      FUNCTIONS_WORKER_RUNTIME: 'node'
-      SCM_DO_BUILD_DURING_DEPLOYMENT: 'true'
-      AZURE_COSMOS_CONNECTION_STRING_KEY: 'AZURE-COSMOS-CONNECTION-STRING'
-      AZURE_COSMOS_DATABASE_NAME: cosmos::database.name
-      AZURE_KEY_VAULT_ENDPOINT: keyVault.properties.vaultUri
-    }
-  }
-
-  resource logs 'config' = {
-    name: 'logs'
-    properties: {
-      applicationLogs: {
-        fileSystem: {
-          level: 'Verbose'
-        }
-      }
-      detailedErrorMessages: {
-        enabled: true
-      }
-      failedRequestsTracing: {
-        enabled: true
-      }
-      httpLogs: {
-        fileSystem: {
-          enabled: true
-          retentionInDays: 1
-          retentionInMb: 35
-        }
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalyticsWorkspace.properties.customerId
+        sharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
       }
     }
   }
 }
 
-resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
-  name: '${abbrs.webServerFarms}${resourceToken}'
+// 2022-02-01-preview needed for anonymousPullEnabled
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-02-01-preview' = {
+  name: '${abbrs.containerRegistryRegistries}${resourceToken}'
   location: location
   tags: tags
   sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
-    size: 'Y1'
-    family: 'Y'
+    name: 'Standard'
   }
-  kind: 'functionapp'
   properties: {
-    reserved: true
+    adminUserEnabled: true
+    anonymousPullEnabled: false
+    dataEndpointEnabled: false
+    encryption: {
+      status: 'disabled'
+    }
+    networkRuleBypassOptions: 'AzureServices'
+    publicNetworkAccess: 'Enabled'
+    zoneRedundancy: 'Disabled'
   }
 }
 
@@ -113,32 +54,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' = {
       family: 'A'
       name: 'standard'
     }
-    accessPolicies: concat([
-        {
-          objectId: api.identity.principalId
-          permissions: {
-            secrets: [
-              'get'
-              'list'
-            ]
-          }
-          tenantId: subscription().tenantId
-        }
-      ], !empty(principalId) ? [
-        {
-          objectId: principalId
-          permissions: {
-            secrets: [
-              'get'
-              'list'
-            ]
-          }
-          tenantId: subscription().tenantId
-        }
-      ] : [])
+    accessPolicies: []
   }
 
-  resource cosmosConnectionString 'secrets' = {
+  resource cosmosconnectionstring 'secrets' = {
     name: 'AZURE-COSMOS-CONNECTION-STRING'
     properties: {
       value: cosmos.listConnectionStrings().connectionStrings[0].connectionString
@@ -146,19 +65,22 @@ resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' = {
   }
 }
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2020-03-01-preview' = {
-  name: '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
-  location: location
-  tags: tags
-  properties: any({
-    retentionInDays: 30
-    features: {
-      searchVersion: 1
-    }
-    sku: {
-      name: 'PerGB2018'
-    }
-  })
+resource keyVaultAccessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2021-10-01' = if (!empty(principalId)) {
+  name: '${keyVault.name}/add'
+  properties: {
+    accessPolicies: [
+      {
+        objectId: principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+        tenantId: subscription().tenantId
+      }
+    ]
+  }
 }
 
 module applicationInsightsResources 'applicationinsights.bicep' = {
@@ -171,22 +93,50 @@ module applicationInsightsResources 'applicationinsights.bicep' = {
   }
 }
 
-resource storage 'Microsoft.Storage/storageAccounts@2021-09-01' = {
-  name: '${abbrs.storageStorageAccounts}${resourceToken}'
+module api 'api.bicep' = {
+  name: 'api-resources'
+  params: {
+    name: name
+    location: location
+    imageName: apiImageName != '' ? apiImageName : 'nginx:latest'
+  }
+  dependsOn: [
+    containerAppsEnvironment
+    containerRegistry
+    applicationInsightsResources
+    keyVault
+  ]
+}
+
+module web 'web.bicep' = {
+  name: 'web-resources'
+  params: {
+    name: name
+    location: location
+    imageName: webImageName != '' ? webImageName : 'nginx:latest'
+  }
+  dependsOn: [
+    containerAppsEnvironment
+    containerRegistry
+    applicationInsightsResources
+    keyVault
+    api
+  ]
+}
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+  name: '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
   location: location
   tags: tags
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-  properties: {
-    minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
-    networkAcls: {
-      bypass: 'AzureServices'
-      defaultAction: 'Allow'
+  properties: any({
+    retentionInDays: 30
+    features: {
+      searchVersion: 1
     }
-  }
+    sku: {
+      name: 'PerGB2018'
+    }
+  })
 }
 
 resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' = {
@@ -274,5 +224,7 @@ output AZURE_COSMOS_CONNECTION_STRING_KEY string = 'AZURE-COSMOS-CONNECTION-STRI
 output AZURE_COSMOS_DATABASE_NAME string = cosmos::database.name
 output AZURE_KEY_VAULT_ENDPOINT string = keyVault.properties.vaultUri
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
-output WEB_URI string = 'https://${web.properties.defaultHostname}'
-output API_URI string = 'https://${api.properties.defaultHostName}'
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.properties.loginServer
+output AZURE_CONTAINER_REGISTRY_NAME string = containerRegistry.name
+output WEB_URI string = web.outputs.WEB_URI
+output API_URI string = api.outputs.API_URI
