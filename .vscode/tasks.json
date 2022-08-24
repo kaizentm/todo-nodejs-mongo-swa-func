@@ -36,7 +36,6 @@
             },
             "problemMatcher": []
         },
-
         {
             "label": "Start API",
             "type": "dotenv",
@@ -59,7 +58,7 @@
             "label": "API npm start",
             "detail": "Helper task--use 'Start API' task to ensure environment is set up correctly",
             "type": "shell",
-            "command": "npm run start",
+            "command": "func start --typescript --port 3100",
             "options": {
                 "cwd": "${workspaceFolder}/src/api/",
                 "env": {
@@ -71,17 +70,15 @@
             },
             "problemMatcher": []
         },
-
         {
             "label": "Start API and Web",
-            "dependsOn":[
+            "dependsOn": [
                 "Start API",
                 "Start Web"
             ],
             "problemMatcher": []
         }
     ],
-
     "inputs": [
         {
             "id": "dotEnvFilePath",
